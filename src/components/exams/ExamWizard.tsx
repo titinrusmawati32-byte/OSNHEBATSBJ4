@@ -155,7 +155,7 @@ export const ExamWizard: React.FC<ExamWizardProps> = ({
         durationMinutes: duration,
         questionIds: selectedQuestionIds,
         settings,
-        status: initialData ? initialData.status : 'draft',
+        status: initialData ? initialData.status : 'active',
         createdBy: profile.uid,
         teacherName: profile.displayName || profile.name
       });
@@ -511,10 +511,10 @@ export const ExamWizard: React.FC<ExamWizardProps> = ({
                   </div>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 flex gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
-                    <span className="font-bold">Informasi:</span> Paket ujian ini akan disimpan sebagai <span className="font-bold">Draft</span> terlebih dahulu. Anda perlu mengaktifkannya melalui menu Manajemen Paket Ujian agar dapat dikerjakan oleh siswa.
+                <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800 flex gap-3">
+                  <AlertCircle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="text-xs text-emerald-800 dark:text-emerald-200 leading-relaxed">
+                    <span className="font-bold">Informasi:</span> Paket ujian ini akan otomatis disetel ke status <span className="font-bold">Aktif</span> sehingga dapat langsung dikerjakan oleh siswa di menu Ujian Tersedia.
                   </div>
                 </div>
               </div>

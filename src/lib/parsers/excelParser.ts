@@ -1,190 +1,332 @@
 import * as XLSX from 'xlsx';
-import { ParsedQuestion, QuestionDifficulty } from '../../types/question';
+import {
+  ParsedQuestion,
+  QuestionDifficulty,
+  ValidationStatus,
+  ExcelColumnMapping,
+  RawDocument,
+} from '../../types/question';
+
+export interface ExcelInspectionResult {
+  sheetNames: string[];
+  currentSheet: string;
+  headers: string[];
+  totalRows: number;
+  sampleRows: any[][];
+  suggestedMapping: ExcelColumnMapping;
+}
 
 export interface ExcelParseResult {
   questions: ParsedQuestion[];
   sheetNames: string[];
   totalRows: number;
+  rawDocument: RawDocument;
 }
 
 // Normalize column key for flexible header matching
-function normalizeHeaderKey(key: string): string {
-  return key.toLowerCase().replace(/[^a-z0-9]/g, '');
+function normalizeHeader(key: string): string {
+  return String(key || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
 }
 
-export function parseExcelDocument(
+/**
+ * Auto-detect suggested column mapping from headers
+ */
+export function suggestColumnMapping(headers: string[], sheetName: string = ''): ExcelColumnMapping {
+  const mapping: ExcelColumnMapping = {
+    sheetName,
+    headerRowIndex: 0,
+    questionNumberCol: '',
+    questionTextCol: '',
+    optionACol: '',
+    optionBCol: '',
+    optionCCol: '',
+    optionDCol: '',
+    optionECol: '',
+    correctAnswerCol: '',
+    explanationCol: '',
+    imageCol: '',
+    difficultyCol: '',
+  };
+
+  headers.forEach((h, idx) => {
+    const norm = normalizeHeader(h);
+    const colId = h || `Column_${idx + 1}`;
+
+    if (!mapping.questionNumberCol && (norm === 'no' || norm === 'nomor' || norm === 'number' || norm === 'num')) {
+      mapping.questionNumberCol = colId;
+    } else if (
+      !mapping.questionTextCol &&
+      (norm.includes('soal') || norm.includes('pertanyaan') || norm.includes('question') || norm === 'text' || norm.includes('isisoal'))
+    ) {
+      mapping.questionTextCol = colId;
+    } else if (!mapping.optionACol && (norm === 'a' || norm.includes('pilihana') || norm.includes('opsia') || norm === 'optionea')) {
+      mapping.optionACol = colId;
+    } else if (!mapping.optionBCol && (norm === 'b' || norm.includes('pilihanb') || norm.includes('opsib') || norm === 'optione_b')) {
+      mapping.optionBCol = colId;
+    } else if (!mapping.optionCCol && (norm === 'c' || norm.includes('pilihanc') || norm.includes('opsic') || norm === 'optione_c')) {
+      mapping.optionCCol = colId;
+    } else if (!mapping.optionDCol && (norm === 'd' || norm.includes('pilihand') || norm.includes('opsid') || norm === 'optione_d')) {
+      mapping.optionDCol = colId;
+    } else if (!mapping.optionECol && (norm === 'e' || norm.includes('pilihane') || norm.includes('opsie') || norm === 'optione_e')) {
+      mapping.optionECol = colId;
+    } else if (
+      !mapping.correctAnswerCol &&
+      (norm.includes('kunci') || norm === 'jawaban' || norm.includes('correct') || norm === 'ans' || norm === 'key')
+    ) {
+      mapping.correctAnswerCol = colId;
+    } else if (
+      !mapping.explanationCol &&
+      (norm.includes('pembahasan') || norm.includes('penjelasan') || norm.includes('explanation') || norm.includes('solusi'))
+    ) {
+      mapping.explanationCol = colId;
+    } else if (!mapping.imageCol && (norm.includes('gambar') || norm.includes('image') || norm.includes('foto') || norm.includes('url'))) {
+      mapping.imageCol = colId;
+    } else if (!mapping.difficultyCol && (norm.includes('tingkat') || norm.includes('kesulitan') || norm.includes('diff'))) {
+      mapping.difficultyCol = colId;
+    }
+  });
+
+  // Positional fallback if names did not match
+  if (!mapping.questionTextCol && headers.length >= 2) {
+    if (normalizeHeader(headers[0]) === 'no' || !isNaN(Number(headers[0]))) {
+      mapping.questionNumberCol = headers[0];
+      mapping.questionTextCol = headers[1];
+      if (headers[2]) mapping.optionACol = headers[2];
+      if (headers[3]) mapping.optionBCol = headers[3];
+      if (headers[4]) mapping.optionCCol = headers[4];
+      if (headers[5]) mapping.optionDCol = headers[5];
+      if (headers[6]) mapping.correctAnswerCol = headers[6];
+      if (headers[7]) mapping.explanationCol = headers[7];
+    } else {
+      mapping.questionTextCol = headers[0];
+      if (headers[1]) mapping.optionACol = headers[1];
+      if (headers[2]) mapping.optionBCol = headers[2];
+      if (headers[3]) mapping.optionCCol = headers[3];
+      if (headers[4]) mapping.optionDCol = headers[4];
+      if (headers[5]) mapping.correctAnswerCol = headers[5];
+      if (headers[6]) mapping.explanationCol = headers[6];
+    }
+  }
+
+  return mapping;
+}
+
+/**
+ * Inspect Excel workbook structure without parsing all rows yet
+ */
+export function inspectExcelWorkbook(
   fileBuffer: ArrayBuffer,
   sheetIndex: number = 0
-): ExcelParseResult {
-  try {
-    const workbook = XLSX.read(fileBuffer, { type: 'array' });
-    const sheetNames = workbook.SheetNames || [];
-
-    if (sheetNames.length === 0) {
-      throw new Error('File Excel tidak memiliki lembar kerja (sheet).');
-    }
-
-    const selectedSheetName = sheetNames[sheetIndex] || sheetNames[0];
-    const worksheet = workbook.Sheets[selectedSheetName];
-    if (!worksheet) {
-      throw new Error(`Sheet "${selectedSheetName}" tidak ditemukan.`);
-    }
-
-    // Convert sheet to array of rows (objects)
-    const rawData = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '' });
-
-    if (rawData.length === 0) {
-      return { questions: [], sheetNames, totalRows: 0 };
-    }
-
-    const questions: ParsedQuestion[] = [];
-
-    rawData.forEach((row, index) => {
-      // Find matching keys
-      let numVal: number | undefined = undefined;
-      let qText = '';
-      let optA = '';
-      let optB = '';
-      let optC = '';
-      let optD = '';
-      let keyVal = '';
-      let explanation = '';
-      let difficulty: QuestionDifficulty = 'medium';
-      let imageUrl = '';
-
-      Object.entries(row).forEach(([colName, val]) => {
-        const valStr = String(val ?? '').trim();
-        const normKey = normalizeHeaderKey(colName);
-
-        if (normKey === 'no' || normKey === 'nomor' || normKey === 'num') {
-          const parsed = parseInt(valStr, 10);
-          if (!isNaN(parsed)) numVal = parsed;
-        } else if (
-          normKey.includes('soal') ||
-          normKey.includes('pertanyaan') ||
-          normKey.includes('question')
-        ) {
-          qText = valStr;
-        } else if (normKey === 'a' || normKey.includes('pilihana') || normKey.includes('opsia')) {
-          optA = valStr;
-        } else if (normKey === 'b' || normKey.includes('pilihanb') || normKey.includes('opsib')) {
-          optB = valStr;
-        } else if (normKey === 'c' || normKey.includes('pilihanc') || normKey.includes('opsic')) {
-          optC = valStr;
-        } else if (normKey === 'd' || normKey.includes('pilihand') || normKey.includes('opsid')) {
-          optD = valStr;
-        } else if (
-          normKey.includes('kunci') ||
-          normKey === 'jawaban' ||
-          normKey.includes('correct') ||
-          normKey === 'key'
-        ) {
-          const k = valStr.toUpperCase();
-          if (['A', 'B', 'C', 'D'].includes(k)) {
-            keyVal = k;
-          }
-        } else if (
-          normKey.includes('pembahasan') ||
-          normKey.includes('penjelasan') ||
-          normKey.includes('explanation')
-        ) {
-          explanation = valStr;
-        } else if (normKey.includes('kesulitan') || normKey.includes('diff')) {
-          const diffStr = valStr.toLowerCase();
-          if (diffStr.includes('mudah') || diffStr.includes('easy')) difficulty = 'easy';
-          else if (diffStr.includes('sulit') || diffStr.includes('hard')) difficulty = 'hard';
-          else difficulty = 'medium';
-        } else if (normKey.includes('gambar') || normKey.includes('image')) {
-          imageUrl = valStr;
-        }
-      });
-
-      // If headers didn't match standard names, try positional fallback from raw row values
-      if (!qText && Object.keys(row).length >= 5) {
-        const values = Object.values(row).map((v) => String(v ?? '').trim());
-        // Assume [No, Soal, A, B, C, D, Kunci...] or [Soal, A, B, C, D...]
-        if (values.length >= 6 && !isNaN(parseInt(values[0], 10))) {
-          numVal = parseInt(values[0], 10);
-          qText = values[1];
-          optA = values[2];
-          optB = values[3];
-          optC = values[4];
-          optD = values[5];
-          if (values[6]) {
-            const k = values[6].toUpperCase();
-            if (['A', 'B', 'C', 'D'].includes(k)) keyVal = k;
-          }
-        } else if (values.length >= 5) {
-          qText = values[0];
-          optA = values[1];
-          optB = values[2];
-          optC = values[3];
-          optD = values[4];
-          if (values[5]) {
-            const k = values[5].toUpperCase();
-            if (['A', 'B', 'C', 'D'].includes(k)) keyVal = k;
-          }
-        }
-      }
-
-      // Check validation and review status
-      const reviewReasons: string[] = [];
-      let confidence: 'high' | 'medium' | 'low' = 'high';
-
-      if (!qText) {
-        reviewReasons.push('Pertanyaan kosong.');
-        confidence = 'low';
-      }
-      if (!optA || !optB) {
-        reviewReasons.push('Pilihan A atau B belum lengkap.');
-        confidence = 'low';
-      }
-      if (!optC) {
-        reviewReasons.push('Pilihan C belum terisi.');
-        confidence = 'medium';
-      }
-      if (!optD) {
-        reviewReasons.push('Pilihan D belum terisi.');
-        confidence = 'medium';
-      }
-      if (!keyVal) {
-        reviewReasons.push('Kunci jawaban belum ditentukan.');
-        if (confidence === 'high') confidence = 'medium';
-      }
-
-      const needsReview = reviewReasons.length > 0;
-
-      // Only add if there is some question content or options
-      if (qText || optA || optB) {
-        questions.push({
-          id: `parsed_excel_${Date.now()}_${index + 1}`,
-          questionNumber: numVal || index + 1,
-          questionText: qText || `Soal baris ke-${index + 2}`,
-          options: {
-            A: optA,
-            B: optB,
-            C: optC,
-            D: optD,
-          },
-          correctAnswer: (keyVal as any) || '',
-          explanation: explanation || undefined,
-          imageUrl: imageUrl || undefined,
-          difficulty,
-          needsReview,
-          reviewReason: reviewReasons.join(' ') || undefined,
-          confidence,
-          originalText: JSON.stringify(row, null, 2),
-        });
-      }
-    });
-
-    return {
-      questions,
-      sheetNames,
-      totalRows: rawData.length,
-    };
-  } catch (error: any) {
-    console.error('Excel extraction error:', error);
-    throw new Error('Gagal membaca dokumen Excel (.xlsx/.xls): ' + (error.message || 'Format tidak valid.'));
+): ExcelInspectionResult {
+  const workbook = XLSX.read(fileBuffer, { type: 'array' });
+  const sheetNames = workbook.SheetNames || [];
+  if (sheetNames.length === 0) {
+    throw new Error('File Excel tidak memiliki lembar kerja (worksheet).');
   }
+
+  const selectedSheetName = sheetNames[sheetIndex] || sheetNames[0];
+  const worksheet = workbook.Sheets[selectedSheetName];
+  if (!worksheet) {
+    throw new Error(`Sheet "${selectedSheetName}" tidak ditemukan.`);
+  }
+
+  // Get raw 2D array representation
+  const rawMatrix = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1, defval: '' });
+  if (rawMatrix.length === 0) {
+    return {
+      sheetNames,
+      currentSheet: selectedSheetName,
+      headers: [],
+      totalRows: 0,
+      sampleRows: [],
+      suggestedMapping: suggestColumnMapping([], selectedSheetName),
+    };
+  }
+
+  const headerRow = (rawMatrix[0] || []).map((h, i) => String(h || `Kolom ${i + 1}`).trim());
+  const sampleRows = rawMatrix.slice(1, 6);
+  const suggestedMapping = suggestColumnMapping(headerRow, selectedSheetName);
+
+  return {
+    sheetNames,
+    currentSheet: selectedSheetName,
+    headers: headerRow,
+    totalRows: Math.max(0, rawMatrix.length - 1),
+    sampleRows,
+    suggestedMapping,
+  };
+}
+
+/**
+ * Parse Excel document with specific Column Mapping confirmed by user
+ */
+export function parseExcelWithMapping(
+  fileBuffer: ArrayBuffer,
+  mapping: ExcelColumnMapping,
+  fileName: string = 'Dokumen.xlsx'
+): ExcelParseResult {
+  const workbook = XLSX.read(fileBuffer, { type: 'array' });
+  const sheetNames = workbook.SheetNames || [];
+  const selectedSheetName = mapping.sheetName || sheetNames[0];
+  const worksheet = workbook.Sheets[selectedSheetName];
+
+  if (!worksheet) {
+    throw new Error(`Sheet "${selectedSheetName}" tidak ditemukan.`);
+  }
+
+  const rawData = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '' });
+  const questions: ParsedQuestion[] = [];
+  const warnings: string[] = [];
+
+  rawData.forEach((row, index) => {
+    const rowNumber = index + 2; // Row index + header offset
+
+    // Extract values based on mapping
+    const getVal = (colKey: string | undefined): string => {
+      if (!colKey) return '';
+      return String(row[colKey] ?? '').trim();
+    };
+
+    const numStr = getVal(mapping.questionNumberCol);
+    const parsedNum = parseInt(numStr, 10);
+    const questionNumber = !isNaN(parsedNum) ? parsedNum : index + 1;
+
+    const questionText = getVal(mapping.questionTextCol);
+    const optA = getVal(mapping.optionACol);
+    const optB = getVal(mapping.optionBCol);
+    const optC = getVal(mapping.optionCCol);
+    const optD = getVal(mapping.optionDCol);
+    const optE = mapping.optionECol ? getVal(mapping.optionECol) : '';
+    const keyRaw = getVal(mapping.correctAnswerCol).trim();
+    const explanation = getVal(mapping.explanationCol);
+    const imageUrl = getVal(mapping.imageCol);
+    const diffRaw = getVal(mapping.difficultyCol).toLowerCase();
+
+    // Skip totally blank rows
+    if (!questionText && !optA && !optB && !optC && !optD && !optE) {
+      return;
+    }
+
+    let difficulty: QuestionDifficulty = 'medium';
+    if (diffRaw.includes('mudah') || diffRaw.includes('easy')) difficulty = 'easy';
+    else if (diffRaw.includes('sulit') || diffRaw.includes('hard')) difficulty = 'hard';
+
+    // Strict validation
+    const reviewReasons: string[] = [];
+    let validationStatus: ValidationStatus = 'VALID';
+    let confidence: 'high' | 'medium' | 'low' = 'high';
+
+    if (!questionText) {
+      reviewReasons.push(`Pertanyaan kosong pada baris ${rowNumber}.`);
+      validationStatus = 'FAILED';
+      confidence = 'low';
+    }
+
+    if (!optA || !optB) {
+      reviewReasons.push(`Pilihan A atau B tidak ditemukan pada baris ${rowNumber}.`);
+      validationStatus = 'FAILED';
+      confidence = 'low';
+    }
+
+    if (!optC) {
+      reviewReasons.push('Pilihan C tidak ditemukan pada baris spreadsheet (jangan mengarang opsi).');
+      if (validationStatus !== 'FAILED') validationStatus = 'NEEDS_REVIEW';
+      if (confidence === 'high') confidence = 'medium';
+    }
+
+    if (!optD) {
+      reviewReasons.push('Pilihan D tidak ditemukan pada baris spreadsheet.');
+      if (validationStatus !== 'FAILED') validationStatus = 'NEEDS_REVIEW';
+      if (confidence === 'high') confidence = 'medium';
+    }
+
+    // Sanitize answer key: handles "A", "a", "A. Padi", "Jawaban: B", "(C)"
+    let validKey: 'A' | 'B' | 'C' | 'D' | 'E' | '' = '';
+    const letterMatch = keyRaw.match(/([A-Ea-e])/);
+    if (letterMatch) {
+      validKey = letterMatch[1].toUpperCase() as any;
+    } else {
+      reviewReasons.push(`Kunci jawaban tidak terisi atau tidak valid ("${keyRaw}") pada baris ${rowNumber}.`);
+      if (validationStatus !== 'FAILED') validationStatus = 'NEEDS_REVIEW';
+      if (confidence === 'high') confidence = 'medium';
+    }
+
+    const needsReview = validationStatus !== 'VALID';
+
+    questions.push({
+      id: `parsed_excel_${Date.now()}_${index + 1}_${Math.random().toString(36).slice(2, 6)}`,
+      questionNumber,
+      questionText: questionText || `Soal baris ${rowNumber}`,
+      options: {
+        A: optA,
+        B: optB,
+        C: optC,
+        D: optD,
+        E: optE || undefined,
+      },
+      correctAnswer: validKey,
+      explanation: explanation || undefined,
+      imageUrl: imageUrl || undefined,
+      difficulty,
+
+      validationStatus,
+      needsReview,
+      reviewReasons,
+      reviewReason: reviewReasons.length > 0 ? reviewReasons.join(' ') : undefined,
+      confidence,
+      hasDifferencesFromSource: false,
+      differenceNotes: [],
+
+      // Source mapping (Requirement: sourceSheet and sourceRow audit trail)
+      sourceFileName: fileName,
+      sourceType: 'excel',
+      sourceSheet: selectedSheetName,
+      sourceRow: rowNumber,
+      sourceQuestionNumber: questionNumber,
+      extractionMethod: 'excel_column_mapped',
+
+      // Original snippet for side-by-side review
+      originalSnippet: `[Sheet: ${selectedSheetName}, Baris: ${rowNumber}]\n` + JSON.stringify(row, null, 2),
+      originalText: JSON.stringify(row),
+    });
+  });
+
+  const rawDocument: RawDocument = {
+    importId: `raw_excel_${Date.now()}`,
+    fileName,
+    fileType: 'excel',
+    rawText: `Excel Workbook: ${fileName} | Sheet: ${selectedSheetName} | Total Data Rows: ${rawData.length}`,
+    sheets: [
+      {
+        sheetName: selectedSheetName,
+        headers: Object.keys(rawData[0] || {}),
+        rows: rawData.map((r) => Object.values(r)),
+        totalRows: rawData.length,
+      },
+    ],
+    extractionMethod: 'excel_column_mapped',
+    extractionWarnings: warnings,
+    extractedAt: new Date(),
+  };
+
+  return {
+    questions,
+    sheetNames,
+    totalRows: rawData.length,
+    rawDocument,
+  };
+}
+
+/**
+ * Standard Excel document parse with auto-suggested column mapping
+ */
+export function parseExcelDocument(
+  fileBuffer: ArrayBuffer,
+  fileName: string = 'Dokumen.xlsx',
+  sheetIndex: number = 0
+): ExcelParseResult {
+  const inspection = inspectExcelWorkbook(fileBuffer, sheetIndex);
+  return parseExcelWithMapping(fileBuffer, inspection.suggestedMapping, fileName);
 }

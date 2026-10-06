@@ -10,6 +10,7 @@ import {
   QuestionImportSession,
   QuestionDifficulty,
   QuestionSourceType,
+  ExcelColumnMapping,
 } from '../../types/question';
 import {
   getQuestions,
@@ -22,7 +23,10 @@ import {
   cancelImportSession,
   updateImportSession,
   getImportSession,
+  inspectExcelFile,
 } from '../../services/questionImportService';
+import { ExcelInspectionResult } from '../../lib/parsers/excelParser';
+import { assistStructureWithAI } from '../../lib/parsers/aiStructureAssistant';
 
 // Subcomponents & Modals
 import { FormatSelectorModal } from './FormatSelectorModal';
@@ -34,6 +38,8 @@ import { QuestionPreviewModal } from './QuestionPreviewModal';
 import { QuestionCompareModal } from './QuestionCompareModal';
 import { ManualQuestionModal } from './ManualQuestionModal';
 import { ImportHistoryModal } from './ImportHistoryModal';
+import { ExcelColumnMapperModal } from './ExcelColumnMapperModal';
+import { SideBySideReview } from './SideBySideReview';
 
 import {
   UploadCloud,
@@ -89,6 +95,11 @@ export const QuestionBankManager: React.FC = () => {
   const [hasImageReferencesNote, setHasImageReferencesNote] = useState(false);
   const [pdfScanWarning, setPdfScanWarning] = useState<string | null>(null);
 
+  // Excel Column Mapping State (Requirement E)
+  const [excelInspection, setExcelInspection] = useState<ExcelInspectionResult | null>(null);
+  const [pendingExcelFile, setPendingExcelFile] = useState<{ file: File; subjectId: string } | null>(null);
+  const [isExcelMapperOpen, setIsExcelMapperOpen] = useState(false);
+
   // Review mode state
   const [reviewQuestions, setReviewQuestions] = useState<ParsedQuestion[]>([]);
   const [reviewFilter, setReviewFilter] = useState<
@@ -104,6 +115,7 @@ export const QuestionBankManager: React.FC = () => {
   const [questionToDelete, setQuestionToDelete] = useState<string | null>(null);
   const [isSavingFinal, setIsSavingFinal] = useState(false);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+  const [isAiAssisting, setIsAiAssisting] = useState(false);
 
   // Fetch bank soal questions
   const fetchBankQuestions = async () => {
@@ -136,8 +148,43 @@ export const QuestionBankManager: React.FC = () => {
     setViewMode('upload');
   };
 
-  // Process Document Workflow
+  // Process Document Workflow (with Excel Column Mapping Interception)
   const handleProcessDocument = async (file: File, subjectId: string) => {
+    if (!profile) return;
+
+    if (selectedFormat === 'excel') {
+      setIsProcessing(true);
+      setProcessingStep('Menganalisis lembar kerja dan susunan kolom...');
+      try {
+        const inspection = await inspectExcelFile(file);
+        setExcelInspection(inspection);
+        setPendingExcelFile({ file, subjectId });
+        setIsExcelMapperOpen(true);
+        setIsProcessing(false);
+        return;
+      } catch (err: any) {
+        console.error('Inspection error:', err);
+        showToast('Gagal membaca sheet Excel: ' + (err.message || 'Error'), 'error');
+        setIsProcessing(false);
+        return;
+      }
+    }
+
+    await runDocumentProcessing(file, selectedFormat, subjectId);
+  };
+
+  const handleConfirmExcelMapping = async (mapping: ExcelColumnMapping) => {
+    if (!pendingExcelFile || !profile) return;
+    setIsExcelMapperOpen(false);
+    await runDocumentProcessing(pendingExcelFile.file, 'excel', pendingExcelFile.subjectId, mapping);
+  };
+
+  const runDocumentProcessing = async (
+    file: File,
+    fileType: 'word' | 'excel' | 'pdf',
+    subjectId: string,
+    excelMapping?: ExcelColumnMapping
+  ) => {
     if (!profile) return;
     setIsProcessing(true);
     setPdfScanWarning(null);
@@ -146,9 +193,10 @@ export const QuestionBankManager: React.FC = () => {
     try {
       const result = await processDocument({
         file,
-        fileType: selectedFormat,
+        fileType,
         subjectId,
         user: profile,
+        excelMapping,
         onProgress: (step) => setProcessingStep(step),
       });
 
@@ -208,6 +256,54 @@ export const QuestionBankManager: React.FC = () => {
         totalValid: updatedList.filter((q) => !q.needsReview).length,
         totalNeedsReview: updatedList.filter((q) => q.needsReview).length,
       }).catch(console.error);
+    }
+  };
+
+  // AI Structure Assistant (Strict Zero-Hallucination)
+  const handleAiAssist = async () => {
+    const rawText = activeSession?.rawDocument?.rawText;
+    if (!rawText) {
+      showToast('Teks mentah dokumen tidak tersedia untuk bantuan AI.', 'warning');
+      return;
+    }
+
+    setIsAiAssisting(true);
+    try {
+      const aiQuestions = await assistStructureWithAI(
+        rawText,
+        activeSession?.fileName || 'Dokumen'
+      );
+
+      if (!aiQuestions || aiQuestions.length === 0) {
+        showToast(
+          'AI tidak dapat menganalisis atau Gemini API key belum disiapkan. Tetap gunakan hasil ekstraksi dokumen asli.',
+          'info'
+        );
+        return;
+      }
+
+      // Merge with existing image attachments & source coordinates
+      const merged = aiQuestions.map((aiQ) => {
+        const existing = reviewQuestions.find((r) => r.questionNumber === aiQ.questionNumber);
+        return {
+          ...aiQ,
+          imageUrl: existing?.imageUrl || aiQ.imageUrl,
+          imageAlt: existing?.imageAlt || aiQ.imageAlt,
+          sourceSheet: existing?.sourceSheet,
+          sourceRow: existing?.sourceRow,
+          sourcePage: existing?.sourcePage,
+        };
+      });
+
+      setReviewQuestions(merged);
+      showToast(
+        `Berhasil menstrukturkan ${merged.length} butir soal secara verbatim tanpa parafrase!`,
+        'success'
+      );
+    } catch (err: any) {
+      showToast('Gagal memproses dengan AI: ' + (err.message || 'Error'), 'error');
+    } finally {
+      setIsAiAssisting(false);
     }
   };
 
@@ -620,6 +716,17 @@ export const QuestionBankManager: React.FC = () => {
           MODE 3: TEMPORARY REVIEW STATE (/questions/import/review)
       ───────────────────────────────────────────────────────────── */}
       {viewMode === 'review' && activeSession && (
+        <SideBySideReview
+          session={activeSession}
+          questions={reviewQuestions}
+          onUpdateQuestion={handleUpdateReviewQuestion}
+          onDeleteQuestion={handleDeleteReviewQuestion}
+          onFinalSave={handleFinalSave}
+          onCancel={() => setIsCancelConfirmOpen(true)}
+          isSaving={isSavingFinal}
+        />
+      )}
+      {false && viewMode === 'review' && activeSession && (
         <div className="space-y-6">
           {/* Review Header Banner */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
@@ -630,14 +737,14 @@ export const QuestionBankManager: React.FC = () => {
                     Sesi Review Soal
                   </span>
                   <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                    {activeSession.fileType.toUpperCase()}
+                    {activeSession?.fileType?.toUpperCase() || ''}
                   </span>
                   <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                    {activeSession.subjectId.toUpperCase()}
+                    {activeSession?.subjectId?.toUpperCase() || ''}
                   </span>
                 </div>
                 <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100">
-                  {activeSession.fileName}
+                  {activeSession?.fileName || 'Dokumen'}
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
                   Periksa hasil ekstraksi, perbaiki soal yang memerlukan perhatian, dan tambahkan gambar sebelum menyimpan ke Bank Soal.
@@ -645,20 +752,35 @@ export const QuestionBankManager: React.FC = () => {
               </div>
 
               {/* Action Buttons on top right */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {needsReviewCount > 0 && activeSession?.rawDocument?.rawText && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAiAssist}
+                    disabled={isAiAssisting || isSavingFinal}
+                    isLoading={isAiAssisting}
+                    leftIcon={<Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />}
+                    className="border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+                  >
+                    Bantu Struktur (AI)
+                  </Button>
+                )}
+
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setIsCancelConfirmOpen(true)}
+                  disabled={isAiAssisting || isSavingFinal}
                 >
-                  Batalkan Import
+                  Batalkan
                 </Button>
 
                 <Button
                   variant="primary"
                   size="sm"
                   onClick={() => handleFinalSave(false)}
-                  disabled={isSavingFinal || reviewQuestions.length === 0}
+                  disabled={isSavingFinal || isAiAssisting || reviewQuestions.length === 0}
                   isLoading={isSavingFinal}
                 >
                   SIMPAN SEMUA ({reviewQuestions.length} SOAL)
@@ -878,6 +1000,17 @@ export const QuestionBankManager: React.FC = () => {
         onClose={() => setIsFormatModalOpen(false)}
         onSelectFormat={handleSelectFormat}
       />
+
+      {/* Interactive Excel Column Mapper Modal */}
+      {excelInspection && (
+        <ExcelColumnMapperModal
+          isOpen={isExcelMapperOpen}
+          onClose={() => setIsExcelMapperOpen(false)}
+          inspection={excelInspection}
+          onConfirmMapping={handleConfirmExcelMapping}
+          isProcessing={isProcessing}
+        />
+      )}
 
       {/* Manual Question Addition Modal */}
       <ManualQuestionModal

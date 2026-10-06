@@ -9,10 +9,12 @@ import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { AdminLayout } from '../layouts/AdminLayout';
 import { TeacherLayout } from '../layouts/TeacherLayout';
 import { StudentLayout } from '../layouts/StudentLayout';
+import { ProtectedRoute, RoleGuard } from './ProtectedRoute';
 
 // Student Pages
 import { StudentDashboardPage } from '../pages/student/StudentDashboardPage';
 import { StudentExamsPage } from '../pages/student/StudentExamsPage';
+import { ExamAttemptPage } from '../pages/student/ExamAttemptPage';
 import { StudentMaterialsPage } from '../pages/student/StudentMaterialsPage';
 import { StudentResultsPage } from '../pages/student/StudentResultsPage';
 import { StudentResultDetailPage } from '../pages/student/StudentResultDetailPage';
@@ -37,6 +39,7 @@ import { AdminSchedulesPage } from '../pages/admin/AdminSchedulesPage';
 import { AdminResultsPage } from '../pages/admin/AdminResultsPage';
 import { AdminRankingPage } from '../pages/admin/AdminRankingPage';
 import { AdminSettingsPage } from '../pages/admin/AdminSettingsPage';
+import { QuestionImportReviewPage } from '../pages/common/QuestionImportReviewPage';
 
 export const AppRoutes: React.FC = () => {
   const { isAuthenticated, profile } = useAuth();
@@ -68,10 +71,45 @@ export const AppRoutes: React.FC = () => {
           }
         />
 
+        {/* Full-Screen CBT Examination Engine (Distraction-free) */}
+        <Route
+          path="/student/exams/:examId/attempt/:attemptId"
+          element={
+            <ProtectedRoute>
+              <RoleGuard allowedRoles={['student', 'admin', 'teacher']}>
+                <ExamAttemptPage />
+              </RoleGuard>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/siswa/exams/:examId/attempt/:attemptId"
+          element={
+            <ProtectedRoute>
+              <RoleGuard allowedRoles={['student', 'admin', 'teacher']}>
+                <ExamAttemptPage />
+              </RoleGuard>
+            </ProtectedRoute>
+          }
+        />
+
         {/* Student Routes */}
         <Route path="/student" element={<StudentLayout />}>
           <Route index element={<StudentDashboardPage />} />
           <Route path="exams" element={<StudentExamsPage />} />
+          <Route path="exams/:examId" element={<StudentExamsPage />} />
+          <Route path="materials" element={<StudentMaterialsPage />} />
+          <Route path="results" element={<StudentResultsPage />} />
+          <Route path="results/:resultId" element={<StudentResultDetailPage />} />
+          <Route path="history" element={<StudentHistoryPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+        </Route>
+
+        {/* Alias Indonesian /siswa Routes */}
+        <Route path="/siswa" element={<StudentLayout />}>
+          <Route index element={<StudentDashboardPage />} />
+          <Route path="exams" element={<StudentExamsPage />} />
+          <Route path="exams/:examId" element={<StudentExamsPage />} />
           <Route path="materials" element={<StudentMaterialsPage />} />
           <Route path="results" element={<StudentResultsPage />} />
           <Route path="results/:resultId" element={<StudentResultDetailPage />} />
@@ -83,6 +121,22 @@ export const AppRoutes: React.FC = () => {
         <Route path="/teacher" element={<TeacherLayout />}>
           <Route index element={<TeacherDashboardPage />} />
           <Route path="questions" element={<TeacherQuestionsPage />} />
+          <Route path="questions/import/review" element={<QuestionImportReviewPage />} />
+          <Route path="questions/import/review/:importId" element={<QuestionImportReviewPage />} />
+          <Route path="exams" element={<TeacherExamsPage />} />
+          <Route path="materials" element={<TeacherMaterialsPage />} />
+          <Route path="results" element={<TeacherResultsPage />} />
+          <Route path="results/:resultId" element={<TeacherResultDetailPage />} />
+          <Route path="ranking" element={<TeacherRankingPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+        </Route>
+
+        {/* Alias /guru Routes */}
+        <Route path="/guru" element={<TeacherLayout />}>
+          <Route index element={<TeacherDashboardPage />} />
+          <Route path="questions" element={<TeacherQuestionsPage />} />
+          <Route path="questions/import/review" element={<QuestionImportReviewPage />} />
+          <Route path="questions/import/review/:importId" element={<QuestionImportReviewPage />} />
           <Route path="exams" element={<TeacherExamsPage />} />
           <Route path="materials" element={<TeacherMaterialsPage />} />
           <Route path="results" element={<TeacherResultsPage />} />
@@ -97,6 +151,8 @@ export const AppRoutes: React.FC = () => {
           <Route path="students" element={<AdminStudentsPage />} />
           <Route path="teachers" element={<AdminTeachersPage />} />
           <Route path="questions" element={<AdminQuestionsPage />} />
+          <Route path="questions/import/review" element={<QuestionImportReviewPage />} />
+          <Route path="questions/import/review/:importId" element={<QuestionImportReviewPage />} />
           <Route path="exams" element={<AdminExamsPage />} />
           <Route path="materials" element={<AdminMaterialsPage />} />
           <Route path="schedules" element={<AdminSchedulesPage />} />

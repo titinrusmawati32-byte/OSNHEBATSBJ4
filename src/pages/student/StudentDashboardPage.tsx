@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { APP_SUBJECTS } from '../../constants/subjects';
 import { examService } from '../../services/examService';
+import { attemptService } from '../../services/attemptService';
 import { SubjectCard } from '../../components/dashboard/SubjectCard';
 import { ExamCard } from '../../components/dashboard/ExamCard';
 import { StatCard } from '../../components/dashboard/StatCard';
@@ -56,10 +57,17 @@ export const StudentDashboardPage: React.FC = () => {
     setSelectedExamForModal(exam);
   };
 
-  const handleStartExam = () => {
-    if (selectedExamForModal) {
-      navigate(`/student/exams/${selectedExamForModal.id}`);
-      setSelectedExamForModal(null);
+  const handleStartExam = async () => {
+    if (selectedExamForModal && currentUser) {
+      try {
+        const attemptId = await attemptService.createAttempt(selectedExamForModal, currentUser as any);
+        const examIdToNavigate = selectedExamForModal.id;
+        setSelectedExamForModal(null);
+        navigate(`/student/exams/${examIdToNavigate}/attempt/${attemptId}`);
+      } catch (err) {
+        console.error('Error starting exam from dashboard:', err);
+        navigate('/student/exams');
+      }
     }
   };
 

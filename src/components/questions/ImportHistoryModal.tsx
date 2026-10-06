@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
-import { QuestionImportSession } from '../../types/question';
+import { QuestionImportSession, ImportStatsSummary } from '../../types/question';
 import { useAuth } from '../../contexts/AuthContext';
-import { getImportHistory } from '../../services/questionImportService';
+import { getImportHistory, getImportStats } from '../../services/questionImportService';
 import {
   FileText,
   FileSpreadsheet,
@@ -15,6 +15,8 @@ import {
   User,
   ArrowRight,
   RotateCcw,
+  Layers,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface ImportHistoryModalProps {
@@ -30,13 +32,26 @@ export const ImportHistoryModal: React.FC<ImportHistoryModalProps> = ({
 }) => {
   const { profile } = useAuth();
   const [history, setHistory] = useState<QuestionImportSession[]>([]);
+  const [stats, setStats] = useState<ImportStatsSummary>({
+    totalSessions: 0,
+    totalSuccessful: 0,
+    totalNeedsReview: 0,
+    totalFailed: 0,
+    totalQuestionsDetected: 0,
+  });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen && profile) {
       setLoading(true);
-      getImportHistory(profile.role, profile.uid)
-        .then((data) => setHistory(data))
+      Promise.all([
+        getImportHistory(profile.role, profile.uid),
+        getImportStats(profile.role, profile.uid),
+      ])
+        .then(([histData, statsData]) => {
+          setHistory(histData);
+          setStats(statsData);
+        })
         .finally(() => setLoading(false));
     }
   }, [isOpen, profile]);
@@ -79,27 +94,76 @@ export const ImportHistoryModal: React.FC<ImportHistoryModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Riwayat Import Dokumen Soal"
-      description="Daftar audit file naskah soal yang pernah diunggah ke sistem"
-      size="lg"
+      title="Riwayat & Statistik Import Dokumen Soal"
+      description="Audit data sesi import naskah soal Word, Excel, dan PDF berbasis Firestore nyata"
+      size="xl"
     >
-      <div className="space-y-4 text-left pt-2">
+      <div className="space-y-5 text-left pt-2">
+        {/* Real Summary Metrics from Firestore (Requirement R) */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+          <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-center">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+              Total Import
+            </span>
+            <span className="text-xl font-black text-slate-900 dark:text-slate-100 mt-0.5 block">
+              {stats.totalSessions}
+            </span>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-center">
+            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">
+              Berhasil
+            </span>
+            <span className="text-xl font-black text-emerald-800 dark:text-emerald-300 mt-0.5 block">
+              {stats.totalSuccessful}
+            </span>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-center">
+            <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider block">
+              Perlu Review
+            </span>
+            <span className="text-xl font-black text-amber-800 dark:text-amber-300 mt-0.5 block">
+              {stats.totalNeedsReview}
+            </span>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-center">
+            <span className="text-[10px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider block">
+              Gagal / Batal
+            </span>
+            <span className="text-xl font-black text-rose-800 dark:text-rose-300 mt-0.5 block">
+              {stats.totalFailed}
+            </span>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-center col-span-2 sm:col-span-1">
+            <span className="text-[10px] font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider block">
+              Total Soal
+            </span>
+            <span className="text-xl font-black text-blue-800 dark:text-blue-300 mt-0.5 block">
+              {stats.totalQuestionsDetected}
+            </span>
+          </div>
+        </div>
+
+        {/* Sessions List */}
         {loading ? (
           <div className="py-12 text-center text-xs text-slate-400">
-            Memuat riwayat import...
+            Memuat data audit dari database Firestore...
           </div>
         ) : history.length === 0 ? (
-          <div className="py-12 text-center space-y-2">
+          <div className="py-12 text-center space-y-2 bg-slate-50 dark:bg-slate-850 rounded-2xl border border-slate-100 dark:border-slate-800 p-6">
             <Clock className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-700" />
             <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
               Belum ada riwayat import
             </div>
             <p className="text-xs text-slate-400">
-              Dokumen Word, Excel, atau PDF yang diimpor akan tercatat di sini.
+              Dokumen Word, Excel, atau PDF yang diimpor akan tersimpan riwayat auditnya di sini.
             </p>
           </div>
         ) : (
-          <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+          <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
             {history.map((item) => {
               const dateStr = item.createdAt?.toDate
                 ? item.createdAt.toDate().toLocaleDateString('id-ID', {
@@ -114,7 +178,7 @@ export const ImportHistoryModal: React.FC<ImportHistoryModalProps> = ({
               return (
                 <div
                   key={item.id}
-                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-blue-400/50 transition-colors"
                 >
                   <div className="flex items-start gap-3 min-w-0">
                     <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700 mt-0.5">
@@ -132,7 +196,7 @@ export const ImportHistoryModal: React.FC<ImportHistoryModalProps> = ({
 
                       <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 mt-1">
                         <span className="flex items-center gap-1 font-mono">
-                          {item.totalDetected} soal terdeteksi ({item.totalValid} valid)
+                          {item.totalDetected} soal terdeteksi ({item.validCount} valid, {item.reviewCount} review)
                         </span>
                         <span>•</span>
                         <span className="flex items-center gap-1">
@@ -161,7 +225,7 @@ export const ImportHistoryModal: React.FC<ImportHistoryModalProps> = ({
                         }}
                         rightIcon={<ArrowRight className="w-3 h-3" />}
                       >
-                        Lanjutkan
+                        Lanjutkan Review
                       </Button>
                     )}
                   </div>

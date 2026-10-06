@@ -5,9 +5,10 @@ import { CheckCircle2, XCircle, HelpCircle, Clock, Percent, Trophy } from 'lucid
 
 interface ResultSummaryProps {
   result: AttemptResult;
+  showScore?: boolean;
 }
 
-export const ResultSummary: React.FC<ResultSummaryProps> = ({ result }) => {
+export const ResultSummary: React.FC<ResultSummaryProps> = ({ result, showScore = true }) => {
   const isPassed = result.passed;
 
   return (
@@ -18,26 +19,41 @@ export const ResultSummary: React.FC<ResultSummaryProps> = ({ result }) => {
         
         <div className="relative z-10 space-y-4">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-xs font-black uppercase tracking-widest text-slate-500">
-            Skor Akhir Ujian
+            {showScore ? 'Skor Akhir Ujian' : 'Status Ujian'}
           </div>
 
           <div className="flex flex-col items-center justify-center">
-            <span className={`text-8xl font-black tracking-tighter ${isPassed ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-              {result.score}
-            </span>
-            <div className={`mt-2 px-6 py-2 rounded-2xl text-sm font-black uppercase tracking-wider border-2 shadow-sm ${
-              isPassed 
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' 
-                : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
-            }`}>
-              {isPassed ? 'LULUS' : 'BELUM LULUS'}
-            </div>
+            {showScore ? (
+              <>
+                <span className={`text-8xl font-black tracking-tighter ${isPassed ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                  {result.score}
+                </span>
+                <div className={`mt-2 px-6 py-2 rounded-2xl text-sm font-black uppercase tracking-wider border-2 shadow-sm ${
+                  isPassed 
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800' 
+                    : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+                }`}>
+                  {isPassed ? 'LULUS' : 'BELUM LULUS'}
+                </div>
+              </>
+            ) : (
+              <>
+                <span className="text-5xl font-black tracking-tight text-blue-600 dark:text-blue-400 my-4">
+                  SELESAI
+                </span>
+                <div className="px-6 py-2 rounded-2xl text-sm font-black uppercase tracking-wider border-2 border-blue-200 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800">
+                  TERCATAT
+                </div>
+              </>
+            )}
           </div>
 
-          <p className="text-slate-500 dark:text-slate-400 text-sm max-w-xs mx-auto">
-            {isPassed 
-              ? 'Selamat! Anda telah mencapai ambang batas nilai yang ditentukan untuk bidang ini.' 
-              : 'Terus semangat! Anda dapat mempelajari kembali materi yang belum dikuasai melalui pembahasan.'}
+          <p className="text-slate-500 dark:text-slate-400 text-sm max-w-sm mx-auto">
+            {showScore 
+              ? (isPassed 
+                  ? 'Selamat! Anda telah mencapai ambang batas nilai yang ditentukan untuk bidang ini.' 
+                  : 'Terus semangat! Anda dapat mempelajari kembali materi yang belum dikuasai melalui pembahasan.')
+              : 'Jawaban Anda telah berhasil direkam oleh sistem. Nilai akan diumumkan oleh guru pembina.'}
           </p>
         </div>
       </div>

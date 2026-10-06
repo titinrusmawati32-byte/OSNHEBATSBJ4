@@ -116,9 +116,17 @@ export const QuestionReviewCard: React.FC<QuestionReviewCardProps> = ({
       {question.needsReview && (
         <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900/60 flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-200">
           <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <span className="font-bold">Perlu Review:</span>{' '}
-            {question.reviewReason || 'Terdapat data soal yang belum lengkap atau perlu pemeriksaan.'}
+          <div className="flex-1 space-y-1">
+            <span className="font-bold">Perlu Review Dokumen:</span>
+            {question.reviewReasons && question.reviewReasons.length > 0 ? (
+              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-amber-900 dark:text-amber-300">
+                {question.reviewReasons.map((r, idx) => (
+                  <li key={idx}>{r}</li>
+                ))}
+              </ul>
+            ) : (
+              <div>{question.reviewReason || 'Terdapat data soal yang belum lengkap atau perlu pemeriksaan.'}</div>
+            )}
           </div>
           <button
             type="button"
@@ -153,9 +161,9 @@ export const QuestionReviewCard: React.FC<QuestionReviewCardProps> = ({
 
       {/* Options Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-        {(['A', 'B', 'C', 'D'] as const).map((key) => {
+        {(['A', 'B', 'C', 'D', ...(question.options.E ? ['E'] : [])] as const).map((key) => {
           const isKey = question.correctAnswer === key;
-          const optContent = question.options[key];
+          const optContent = (question.options as Record<string, string | undefined>)[key];
 
           return (
             <div

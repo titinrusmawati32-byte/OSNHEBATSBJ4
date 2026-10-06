@@ -6,7 +6,7 @@ import { ProtectedRoute, RoleGuard } from '../routes/ProtectedRoute';
 export const StudentLayout: React.FC = () => {
   return (
     <ProtectedRoute>
-      <RoleGuard allowedRoles={['student']}>
+      <RoleGuard allowedRoles={['student', 'admin']}>
         <BaseLayout>
           <Outlet />
         </BaseLayout>

@@ -3,7 +3,6 @@ import { Modal } from '../ui/Modal';
 import { Input, Textarea, Select } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { ParsedQuestion, QuestionDifficulty } from '../../types/question';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface QuestionEditModalProps {
   isOpen: boolean;
@@ -24,7 +23,9 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
   const [optionB, setOptionB] = useState<string>('');
   const [optionC, setOptionC] = useState<string>('');
   const [optionD, setOptionD] = useState<string>('');
-  const [correctAnswer, setCorrectAnswer] = useState<'A' | 'B' | 'C' | 'D' | ''>('A');
+  const [optionE, setOptionE] = useState<string>('');
+  const [showOptionE, setShowOptionE] = useState<boolean>(false);
+  const [correctAnswer, setCorrectAnswer] = useState<'A' | 'B' | 'C' | 'D' | 'E' | ''>('A');
   const [explanation, setExplanation] = useState<string>('');
   const [difficulty, setDifficulty] = useState<QuestionDifficulty>('medium');
 
@@ -36,6 +37,8 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
       setOptionB(question.options.B || '');
       setOptionC(question.options.C || '');
       setOptionD(question.options.D || '');
+      setOptionE(question.options.E || '');
+      setShowOptionE(Boolean(question.options.E));
       setCorrectAnswer(question.correctAnswer || 'A');
       setExplanation(question.explanation || '');
       setDifficulty(question.difficulty || 'medium');
@@ -50,6 +53,7 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
     const optB = optionB.trim();
     const optC = optionC.trim();
     const optD = optionD.trim();
+    const optE = showOptionE ? optionE.trim() : undefined;
     const qText = questionText.trim();
 
     const missingFields: string[] = [];
@@ -70,6 +74,7 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
         B: optB,
         C: optC,
         D: optD,
+        E: optE || undefined,
       },
       correctAnswer: correctAnswer || 'A',
       explanation: explanation.trim() || undefined,
@@ -83,6 +88,16 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
     onSave(updated);
     onClose();
   };
+
+  const optionList = [
+    { key: 'A', val: optionA, setVal: setOptionA },
+    { key: 'B', val: optionB, setVal: setOptionB },
+    { key: 'C', val: optionC, setVal: setOptionC },
+    { key: 'D', val: optionD, setVal: setOptionD },
+  ];
+  if (showOptionE) {
+    optionList.push({ key: 'E', val: optionE, setVal: setOptionE });
+  }
 
   return (
     <Modal
@@ -124,19 +139,23 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
           required
         />
 
-        {/* Options A, B, C, D */}
+        {/* Options */}
         <div className="space-y-2.5 pt-1">
-          <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-            Pilihan Jawaban (A, B, C, D):
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+              Pilihan Jawaban:
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowOptionE(!showOptionE)}
+              className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+            >
+              {showOptionE ? '- Hapus Opsi E' : '+ Tambah Opsi E'}
+            </button>
+          </div>
 
           <div className="space-y-2">
-            {[
-              { key: 'A', val: optionA, setVal: setOptionA },
-              { key: 'B', val: optionB, setVal: setOptionB },
-              { key: 'C', val: optionC, setVal: setOptionC },
-              { key: 'D', val: optionD, setVal: setOptionD },
-            ].map((opt) => (
+            {optionList.map((opt) => (
               <div key={opt.key} className="flex items-center gap-2">
                 <span
                   className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center shrink-0 border ${
@@ -152,7 +171,7 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
                   value={opt.val}
                   onChange={(e) => opt.setVal(e.target.value)}
                   placeholder={`Isi pilihan ${opt.key}...`}
-                  required
+                  required={opt.key !== 'E'}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -165,12 +184,12 @@ export const QuestionEditModal: React.FC<QuestionEditModalProps> = ({
           <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
             Pilih Kunci Jawaban Benar:
           </label>
-          <div className="grid grid-cols-4 gap-2">
-            {(['A', 'B', 'C', 'D'] as const).map((k) => (
+          <div className={`grid ${showOptionE ? 'grid-cols-5' : 'grid-cols-4'} gap-2`}>
+            {(['A', 'B', 'C', 'D', ...(showOptionE ? ['E'] : [])] as const).map((k) => (
               <button
                 key={k}
                 type="button"
-                onClick={() => setCorrectAnswer(k)}
+                onClick={() => setCorrectAnswer(k as any)}
                 className={`py-2 px-3 rounded-xl text-xs font-black border transition-all cursor-pointer ${
                   correctAnswer === k
                     ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'

@@ -14,8 +14,10 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { ExamPackage, ExamStatus } from '../types/exam';
+import { StudentQuestion } from '../types/attempt';
 
 const EXAMS_COLLECTION = 'exams';
+const QUESTIONS_COLLECTION = 'questions';
 
 export const examService = {
   async getAllExams() {
@@ -81,5 +83,60 @@ export const examService = {
       status,
       updatedAt: serverTimestamp()
     });
+  },
+
+  /**
+   * Fetches questions for an exam in student mode.
+   * STRICT SECURITY: Deliberately omits `correctAnswer` and `explanation`
+   * so answer keys are never sent to the student client.
+   */
+  async getExamQuestionsForStudent(questionIds: string[]): Promise<StudentQuestion[]> {
+    if (!questionIds || questionIds.length === 0) return [];
+    
+    const resultsMap = new Map<string, StudentQuestion>();
+
+    // Chunk in batches of 30 for Firestore 'in' limitation
+    for (let i = 0; i < questionIds.length; i += 30) {
+      const chunk = questionIds.slice(i, i + 30);
+      const q = query(collection(db, QUESTIONS_COLLECTION), where('__name__', 'in', chunk));
+      const snapshot = await getDocs(q);
+      
+      snapshot.forEach(docSnap => {
+        const d = docSnap.data();
+        const options = d.options || {
+          A: d.optionA || '',
+          B: d.optionB || '',
+          C: d.optionC || '',
+          D: d.optionD || '',
+        };
+
+        const questionText = d.questionText || d.question || '';
+
+        // Only sanitize safe student-facing fields
+        resultsMap.set(docSnap.id, {
+          id: docSnap.id,
+          questionNumber: d.questionNumber || 0,
+          questionText,
+          options,
+          imageUrl: d.imageUrl || undefined,
+          imageAlt: d.imageAlt || undefined,
+          difficulty: d.difficulty || 'medium',
+        });
+      });
+    }
+
+    // Preserve the original order defined in exam.questionIds
+    const orderedQuestions: StudentQuestion[] = [];
+    questionIds.forEach((qId, idx) => {
+      const item = resultsMap.get(qId);
+      if (item) {
+        orderedQuestions.push({
+          ...item,
+          questionNumber: idx + 1, // 1-indexed presentation
+        });
+      }
+    });
+
+    return orderedQuestions;
   }
 };

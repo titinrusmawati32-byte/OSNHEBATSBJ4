@@ -29,43 +29,55 @@ export interface StudentStats {
   currentRank: number;
 }
 
+/**
+ * Helper to safely count documents in a query, falling back to getDocs if needed
+ */
+async function safeCount(q: any): Promise<number> {
+  try {
+    const snap = await getCountFromServer(q);
+    return snap.data().count;
+  } catch {
+    try {
+      const snap = await getDocs(q);
+      return snap.size;
+    } catch {
+      return 0;
+    }
+  }
+}
+
 export const statsService = {
   getAdminStats: async (): Promise<AdminStats> => {
     try {
-      console.log('Fetching admin stats...');
-      
       const studentQuery = query(collection(db, 'users'), where('role', '==', 'student'));
       const teacherQuery = query(collection(db, 'users'), where('role', '==', 'teacher'));
-      
-      console.log('Counting students...');
-      const studentCount = await getCountFromServer(studentQuery);
-      
-      console.log('Counting teachers...');
-      const teacherCount = await getCountFromServer(teacherQuery);
-      
-      console.log('Counting questions...');
-      const questionCount = await getCountFromServer(collection(db, 'questions'));
-      
-      console.log('Counting exams...');
-      const examCount = await getCountFromServer(collection(db, 'exams'));
-      
-      console.log('Counting active exams...');
-      const activeExamCount = await getCountFromServer(query(collection(db, 'exams'), where('status', '==', 'active')));
+      const questionsCol = collection(db, 'questions');
+      const examsCol = collection(db, 'exams');
+      const activeExamsQuery = query(collection(db, 'exams'), where('status', '==', 'active'));
 
-      console.log('Admin stats fetched successfully');
+      const [
+        totalStudents,
+        totalTeachers,
+        totalQuestions,
+        totalExams,
+        activeExams,
+      ] = await Promise.all([
+        safeCount(studentQuery),
+        safeCount(teacherQuery),
+        safeCount(questionsCol),
+        safeCount(examsCol),
+        safeCount(activeExamsQuery),
+      ]);
+
       return {
-        totalStudents: studentCount.data().count,
-        totalTeachers: teacherCount.data().count,
-        totalQuestions: questionCount.data().count,
-        totalExams: examCount.data().count,
-        activeExams: activeExamCount.data().count,
+        totalStudents,
+        totalTeachers,
+        totalQuestions,
+        totalExams,
+        activeExams,
       };
     } catch (error: any) {
-      console.error('Failed to fetch admin stats detail:', error);
-      // Log more specific info if available
-      if (error.code) console.error('Firestore error code:', error.code);
-      if (error.message) console.error('Firestore error message:', error.message);
-      
+      console.warn('Admin stats fetch notice:', error?.message || error);
       return {
         totalStudents: 0,
         totalTeachers: 0,
@@ -78,22 +90,28 @@ export const statsService = {
 
   getTeacherStats: async (teacherId: string): Promise<TeacherStats> => {
     try {
-      const questionCount = await getCountFromServer(query(collection(db, 'questions'), where('createdBy', '==', teacherId)));
-      const examCount = await getCountFromServer(query(collection(db, 'exams'), where('createdBy', '==', teacherId)));
-      const activeExamCount = await getCountFromServer(query(collection(db, 'exams'), where('createdBy', '==', teacherId), where('status', '==', 'active')));
-      
-      // For participants, we would ideally query the attempts collection for exams created by this teacher
-      // For now, return 0 as attempts might not be fully linked yet
-      const participantsCount = 0; 
+      const questionsQuery = query(collection(db, 'questions'), where('createdBy', '==', teacherId));
+      const examsQuery = query(collection(db, 'exams'), where('createdBy', '==', teacherId));
+      const activeExamsQuery = query(
+        collection(db, 'exams'),
+        where('createdBy', '==', teacherId),
+        where('status', '==', 'active')
+      );
+
+      const [totalQuestions, totalExams, activeExams] = await Promise.all([
+        safeCount(questionsQuery),
+        safeCount(examsQuery),
+        safeCount(activeExamsQuery),
+      ]);
 
       return {
-        totalQuestions: questionCount.data().count,
-        totalExams: examCount.data().count,
-        activeExams: activeExamCount.data().count,
-        totalParticipants: participantsCount,
+        totalQuestions,
+        totalExams,
+        activeExams,
+        totalParticipants: 0,
       };
-    } catch (error) {
-      console.error('Failed to fetch teacher stats:', error);
+    } catch (error: any) {
+      console.warn('Teacher stats fetch notice:', error?.message || error);
       return {
         totalQuestions: 0,
         totalExams: 0,

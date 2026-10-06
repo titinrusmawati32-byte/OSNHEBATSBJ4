@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { resultService } from '../../services/resultService';
 import { examService } from '../../services/examService';
+import { attemptService } from '../../services/attemptService';
 import { AttemptResult, QuestionResult } from '../../types/result';
 import { ExamPackage } from '../../types/exam';
 import { ResultSummary } from '../../components/results/ResultSummary';
@@ -46,8 +47,15 @@ export const StudentResultDetailPage: React.FC = () => {
       try {
         const resData = await resultService.getResultById(resultId);
         if (!resData) {
-          showToast('Hasil tidak ditemukan.', 'error');
-          navigate('/student/results');
+          // Check if attempt is still in progress and redirect back to CBT!
+          const activeAttempt = await attemptService.getAttemptById(resultId);
+          if (activeAttempt && (activeAttempt.status === 'in_progress' || activeAttempt.status === 'active')) {
+            showToast('Ujian masih berlangsung. Mengarahkan ke lembar CBT...', 'info');
+            navigate(`/student/exams/${activeAttempt.examId}/attempt/${activeAttempt.id}`, { replace: true });
+            return;
+          }
+          showToast('Hasil ujian tidak ditemukan.', 'error');
+          navigate('/student/results', { replace: true });
           return;
         }
 
@@ -135,7 +143,10 @@ export const StudentResultDetailPage: React.FC = () => {
       {activeTab === 'summary' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in duration-500">
           <div className="lg:col-span-8 space-y-6">
-            <ResultSummary result={result} />
+            <ResultSummary 
+              result={result} 
+              showScore={exam?.settings?.showScoreToStudent !== false} 
+            />
             
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
               <h4 className="text-sm font-black text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
