@@ -1,0 +1,15 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Material PDFs and general uploads
+    match /materials/{allPaths=**} {
+      allow read, write: if true;
+    }
+    
+    // Default allow for app storage
+    match /{allPaths=**} {
+      allow read, write: if true;
+    }
+  }
+}
