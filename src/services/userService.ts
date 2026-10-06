@@ -103,8 +103,12 @@ export async function getUserByUsername(username: string): Promise<UserProfile |
     }
 
     return null;
-  } catch (error) {
-    console.error('Failed to get user by username:', error);
+  } catch (error: any) {
+    if (error?.code === 'permission-denied' || error?.message?.includes('permission')) {
+      console.warn('User lookup permission denied (likely before auth initialization):', clean);
+    } else {
+      console.error('Failed to get user by username:', error);
+    }
     return null;
   }
 }
