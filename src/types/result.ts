@@ -1,6 +1,6 @@
 import { SubjectType } from './auth';
 
-export type ResultStatus = 'graded' | 'grading_failed';
+export type ResultStatus = 'SELESAI' | 'BERJALAN' | 'graded' | 'grading_failed';
 
 export interface QuestionResult {
   questionId: string;
@@ -22,8 +22,12 @@ export interface AttemptResult {
   studentName: string;
   studentClass?: string;
   
+  teacherId?: string;
+  teacherName?: string;
+
   examTitle: string;
   subjectId: SubjectType;
+  subjectName?: string;
 
   totalQuestions: number;
   answeredCount: number;
@@ -36,12 +40,14 @@ export interface AttemptResult {
   percentage: number;
 
   passed: boolean;
+  status: 'SELESAI' | 'BERJALAN' | string;
 
   durationSeconds: number;
   averageTimePerQuestion: number;
 
   startedAt: any;
   submittedAt: any;
+  completedAt?: any;
   gradedAt: any;
 
   createdAt: any;

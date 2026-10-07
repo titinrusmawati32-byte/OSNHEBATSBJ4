@@ -10,6 +10,7 @@ export interface SubjectCardProps {
   color: 'emerald' | 'orange' | 'violet' | 'blue';
   icon: string;
   examCount: number;
+  latestResult?: { score: number; status?: string } | null;
   onClick?: () => void;
 }
 
@@ -21,6 +22,7 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
   color,
   icon,
   examCount,
+  latestResult,
   onClick,
 }) => {
   const renderIcon = () => {
@@ -90,9 +92,16 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
       )}
 
       <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs">
-        <span className="font-semibold text-slate-600 dark:text-slate-300">
-          {examCount} Ujian
-        </span>
+        <div className="flex flex-col text-left">
+          <span className="font-semibold text-slate-600 dark:text-slate-300">
+            {examCount} Ujian
+          </span>
+          {latestResult && typeof latestResult.score === 'number' && (
+            <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400">
+              Nilai: {latestResult.score} • {latestResult.status || 'Selesai'}
+            </span>
+          )}
+        </div>
         <span className="font-bold text-blue-600 dark:text-blue-400 flex items-center gap-0.5 group-hover:translate-x-1 transition-transform">
           <span>Lihat</span>
           <ChevronRight className="w-3.5 h-3.5" />

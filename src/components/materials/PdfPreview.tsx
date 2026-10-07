@@ -48,10 +48,10 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({ fileUrl, title, onClose 
       </div>
 
       {/* PDF Viewer Iframe */}
-      <div className="flex-1 min-h-[500px] bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-center relative">
+      <div className="flex-1 min-h-[320px] sm:min-h-[500px] bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-center relative">
         <iframe
           src={`${fileUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-          className="w-full h-full border-none"
+          className="w-full h-full min-h-[320px] sm:min-h-[500px] border-none"
           title={title}
         />
         

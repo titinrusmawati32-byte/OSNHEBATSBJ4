@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { examService } from '../../services/examService';
 import { attemptService } from '../../services/attemptService';
+import { resultService } from '../../services/resultService';
 import { ExamPackage } from '../../types/exam';
 import { ExamAttempt } from '../../types/attempt';
 import { Button } from '../../components/ui/Button';
@@ -46,16 +47,30 @@ export const StudentExamsPage: React.FC = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isStartingAttempt, setIsStartingAttempt] = useState(false);
 
+  // Results Map: examId -> AttemptResult
+  const [studentResultsMap, setStudentResultsMap] = useState<Record<string, any>>({});
+
   // 1. Fetch Active Exams and Student Attempt Statuses
   const loadExamsAndAttempts = useCallback(async () => {
     if (!profile) return;
     setLoading(true);
 
     try {
-      const data = await examService.getAllExams();
+      const [data, studentResults] = await Promise.all([
+        examService.getAllExams(),
+        resultService.getStudentResults(profile.uid),
+      ]);
       
+      const resMap: Record<string, any> = {};
+      studentResults.forEach((r: any) => {
+        if (r.examId && !resMap[r.examId]) {
+          resMap[r.examId] = r;
+        }
+      });
+      setStudentResultsMap(resMap);
+
       // Filter exams: Only active exams, and check target if configured
-      const activeExams = data.filter((e) => {
+      const activeExams = data.filter((e: ExamPackage) => {
         if (e.status !== 'active') return false;
 
         // Target check
@@ -82,7 +97,7 @@ export const StudentExamsPage: React.FC = () => {
       }> = {};
 
       await Promise.all(
-        activeExams.map(async (exam) => {
+        activeExams.map(async (exam: ExamPackage) => {
           const studentAttempts = await attemptService.getStudentAttempts(exam.id, profile.uid);
           const active = studentAttempts.find(a => a.status === 'in_progress' || a.status === 'active');
           const last = studentAttempts[0]; // Sorted by newest first
@@ -241,8 +256,8 @@ export const StudentExamsPage: React.FC = () => {
                         Sedang Dikerjakan
                       </span>
                     ) : isCompleted ? (
-                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">
-                        Sudah Dikerjakan
+                      <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800">
+                        Nilai: {studentResultsMap[exam.id]?.score ?? '-'} • Selesai
                       </span>
                     ) : (
                       <span className="text-[10px] font-bold text-slate-400 uppercase">

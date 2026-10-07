@@ -266,7 +266,9 @@ export const MaterialList: React.FC<MaterialListProps> = ({ role }) => {
         <Modal 
           isOpen={isFormOpen} 
           onClose={() => setIsFormOpen(false)}
-          className="max-w-2xl"
+          title={editingMaterial ? 'Edit Materi Pembinaan' : 'Tambah Materi Baru'}
+          description="Materi pendukung olimpiade SD (IPA, IPS, Matematika, Bahasa Inggris)"
+          size="2xl"
         >
           <MaterialForm 
             onClose={() => setIsFormOpen(false)}

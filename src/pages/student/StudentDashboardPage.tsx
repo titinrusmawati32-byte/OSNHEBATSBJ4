@@ -5,6 +5,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { APP_SUBJECTS } from '../../constants/subjects';
 import { examService } from '../../services/examService';
 import { attemptService } from '../../services/attemptService';
+import { resultService } from '../../services/resultService';
 import { SubjectCard } from '../../components/dashboard/SubjectCard';
 import { ExamCard } from '../../components/dashboard/ExamCard';
 import { StatCard } from '../../components/dashboard/StatCard';
@@ -29,17 +30,30 @@ export const StudentDashboardPage: React.FC = () => {
     currentRank: 0,
   });
   const [availableExams, setAvailableExams] = useState<ExamPackage[]>([]);
+  const [subjectResultsMap, setSubjectResultsMap] = useState<Record<string, { score: number; status: string }>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadData() {
       if (currentUser?.uid) {
-        const [statsData, examsData] = await Promise.all([
+        const [statsData, examsData, studentResults] = await Promise.all([
           statsService.getStudentStats(currentUser.uid),
-          examService.getActiveExams()
+          examService.getActiveExams(),
+          resultService.getStudentResults(currentUser.uid),
         ]);
         setStats(statsData);
         setAvailableExams(examsData);
+
+        const subjMap: Record<string, { score: number; status: string }> = {};
+        studentResults.forEach((r) => {
+          if (r.subjectId && !subjMap[r.subjectId]) {
+            subjMap[r.subjectId] = {
+              score: r.score,
+              status: r.status || 'Selesai',
+            };
+          }
+        });
+        setSubjectResultsMap(subjMap);
       }
       setLoading(false);
     }
@@ -167,6 +181,7 @@ export const StudentDashboardPage: React.FC = () => {
               color={subj.color}
               icon={subj.icon}
               examCount={availableExams.filter(e => e.subject === subj.id).length}
+              latestResult={subjectResultsMap[subj.id]}
               onClick={() => {
                 setSelectedSubject(selectedSubject === subj.id ? 'all' : subj.id as any);
                 showToast(`Filter bidang: ${subj.name}`, 'info');

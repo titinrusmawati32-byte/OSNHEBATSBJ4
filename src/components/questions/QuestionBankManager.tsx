@@ -941,7 +941,7 @@ export const QuestionBankManager: React.FC = () => {
           </div>
 
           {/* Sticky Bottom Action Bar for Import Review */}
-          <div className="sticky bottom-4 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="sticky bottom-20 md:bottom-4 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-xs text-slate-600 dark:text-slate-300 text-left">
               <span className="font-extrabold text-slate-900 dark:text-slate-100">
                 Ringkasan Import:

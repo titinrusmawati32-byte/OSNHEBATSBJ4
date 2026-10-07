@@ -200,26 +200,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-2xl max-w-2xl w-full border border-slate-200 dark:border-slate-800">
-      <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
-        <div>
-          <h3 className="text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
-            {editMaterial ? 'Edit Materi Pembinaan' : 'Tambah Materi Baru'}
-          </h3>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
-            Materi pendukung olimpiade SD (IPA, IPS, Matematika, Bahasa Inggris)
-          </p>
-        </div>
-        <button 
-          onClick={onClose}
-          className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
-      </div>
-
-      <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+    <div className="w-full text-left">
+      <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
             <Input 
               label="Judul Materi *"
